@@ -306,16 +306,34 @@ function clearAll() {
 // ── 確認モーダル ──
 const DAY_NAMES_JP = ['日','月','火','水','木','金','土'];
 function openConfirm() {
+  const allDates = Array.from(document.querySelectorAll('.cal-day'))
+    .map(el => el.dataset.date).filter(Boolean);
+
+  // 全日入力チェック
+  const unfilled = allDates.filter(d => !(selections[d] && selections[d].length > 0));
+  if (unfilled.length > 0) {
+    // 未入力の日付を赤くハイライト
+    allDates.forEach(d => {
+      const el = document.querySelector(`.cal-day[data-date="${d}"]`);
+      if (el) el.style.borderColor = '';
+    });
+    unfilled.forEach(d => {
+      const el = document.querySelector(`.cal-day[data-date="${d}"]`);
+      if (el) el.style.borderColor = '#dc2626';
+    });
+    alert(`まだ入力されていない日付が ${unfilled.length} 日あります。\nすべての日付にシフトを入力してから提出してください。`);
+    // 最初の未入力日にスクロール
+    const firstEl = document.querySelector(`.cal-day[data-date="${unfilled[0]}"]`);
+    if (firstEl) firstEl.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+
   const tbody = document.getElementById('confirmBody');
   tbody.innerHTML = '';
-  let hasAny = false;
-  // 日付順に並べる
-  const allDates = Array.from(document.querySelectorAll('.cal-day')).map(el => el.dataset.date);
   allDates.forEach(dateStr => {
     if (!dateStr) return;
     const ids = selections[dateStr] || [];
     if (ids.length === 0) return;
-    hasAny = true;
     const d = new Date(dateStr);
     const shiftNames = ids.map(id => {
       const st = SHIFT_TYPES.find(s => s.id === id);
@@ -325,10 +343,6 @@ function openConfirm() {
     tr.innerHTML = `<td>${d.getMonth()+1}/${d.getDate()}</td><td>${DAY_NAMES_JP[d.getDay()]}</td><td>${shiftNames}</td>`;
     tbody.appendChild(tr);
   });
-  if (!hasAny) {
-    alert('シフトを1日以上入力してください。');
-    return;
-  }
   const notes = document.getElementById('notes').value.trim();
   document.getElementById('confirmNotes').textContent = notes ? '特記事項：' + notes : '';
   new bootstrap.Modal(document.getElementById('confirmModal')).show();
