@@ -84,6 +84,8 @@ def project_edit(request, pk):
         'staff_json': json.dumps(staff_list, ensure_ascii=False),
         'managers_json': json.dumps(managers, ensure_ascii=False),
         'shift_colors': SHIFT_COLORS,
+        'default_start': '',
+        'default_end': '',
     })
 
 
