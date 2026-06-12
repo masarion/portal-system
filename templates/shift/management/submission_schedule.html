@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load shift_tags %}
+{% block title %}一覧表 - {{ project.name }}{% endblock %}
+{% block nav_shift %}active{% endblock %}
+
+{% block extra_style %}
+.schedule-table { font-size: 0.78rem; }
+.schedule-table th, .schedule-table td { white-space: nowrap; padding: 0.4rem 0.5rem; vertical-align: middle; }
+.schedule-table .name-col { min-width: 100px; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid var(--border); }
+.schedule-table tr:hover .name-col { background: #f8fafc; }
+.schedule-table thead th { background: #1e40af; color: #fff; border-color: #2563eb; }
+.schedule-table thead .name-col { background: #1e40af; }
+.day-sat { background: #eff6ff !important; }
+.day-sun { background: #fef2f2 !important; }
+.shift-chip { display: inline-block; border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; color: #fff; margin: 1px; }
+.table-wrapper { overflow-x: auto; border-radius: var(--radius); }
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-3">
+    <a href="{% url 'shift:project_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h2 class="mb-0"><i class="bi bi-table me-2 text-primary"></i>シフト一覧表</h2>
+      <div class="text-muted small mt-1">{{ project.name }}</div>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'shift:submission_dashboard' project.pk %}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-speedometer2 me-1"></i>提出状況
+    </a>
+    <a href="{% url 'shift:export_excel' project.pk %}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel出力
+    </a>
+  </div>
+</div>
+
+<!-- 凡例 -->
+{% if shift_types %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% for st in shift_types %}
+  <span class="d-flex align-items-center gap-1 small">
+    <span style="width:12px;height:12px;border-radius:3px;background:{{ st.color }};display:inline-block;"></span>
+    {{ st.name }}{% if st.time_range %} ({{ st.time_range }}){% endif %}
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="table-wrapper">
+    {% if submissions %}
+    <table class="table table-bordered schedule-table mb-0">
+      <thead>
+        <tr>
+          <th class="name-col">氏名</th>
+          {% for d in dates %}
+          <th class="text-center {% if d.weekday == 5 %}day-sat{% elif d.weekday == 6 %}day-sun{% endif %}">
+            {{ d|date:"j" }}<br>
+            <span style="font-size:.68rem;opacity:.85;">
+              {% with wd=d.weekday %}
+                {% if wd == 0 %}月{% elif wd == 1 %}火{% elif wd == 2 %}水{% elif wd == 3 %}木{% elif wd == 4 %}金{% elif wd == 5 %}土{% else %}日{% endif %}
+              {% endwith %}
+            </span>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in submissions %}
+        <tr>
+          <td class="name-col">{{ sub.staff.name|default:"―" }}</td>
+          {% for d in dates %}
+          {% with shifts=sel_map|get_item:sub.pk|get_item:d %}
+          <td class="text-center {% if d.weekday == 5 %}day-sat{% elif d.weekday == 6 %}day-sun{% endif %}">
+            {% if shifts %}
+              {% for st in shifts %}
+              <span class="shift-chip" style="background:{{ st.color }};">{{ st.short_name|default:st.name }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="text-muted">―</span>
+            {% endif %}
+          </td>
+          {% endwith %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-1 d-block mb-3 opacity-25"></i>
+      提出済みのデータがありません
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

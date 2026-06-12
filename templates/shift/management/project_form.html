@@ -1,0 +1,423 @@
+{% extends 'base.html' %}
+{% block title %}{{ page_title }} - シフト管理{% endblock %}
+{% block nav_shift %}active{% endblock %}
+
+{% block extra_style %}
+.section-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin-bottom: 1rem; }
+.section-header { padding: 0.85rem 1.1rem; font-weight: 600; font-size: 0.875rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-radius: var(--radius); }
+.section-header:hover { background: #f8fafc; }
+.section-body { padding: 1rem 1.1rem; border-top: 1px solid var(--border); }
+.shift-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.color-dot { width: 28px; height: 28px; border-radius: 8px; border: 2px solid var(--border); cursor: pointer; flex-shrink: 0; }
+.staff-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.color-picker-popup { position: absolute; z-index: 100; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; box-shadow: 0 8px 24px rgba(0,0,0,.12); display: none; }
+.color-swatch { width: 24px; height: 24px; border-radius: 6px; cursor: pointer; display: inline-block; transition: transform .15s; }
+.color-swatch:hover { transform: scale(1.2); }
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center gap-3">
+  <a href="{% url 'shift:project_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h2 class="mb-0"><i class="bi bi-calendar3 me-2 text-primary"></i>{{ page_title }}</h2>
+</div>
+
+<form method="post" id="projectForm">
+  {% csrf_token %}
+  <input type="hidden" name="shift_types_json" id="shiftTypesJson">
+  <input type="hidden" name="staff_json" id="staffJson">
+  <input type="hidden" name="managers_json" id="managersJson">
+
+  <div class="row g-3">
+    <!-- 左カラム -->
+    <div class="col-lg-6">
+
+      <!-- 基本情報 -->
+      <div class="section-card">
+        <div class="section-header">
+          <span><i class="bi bi-info-circle me-2 text-primary"></i>基本情報</span>
+        </div>
+        <div class="section-body">
+          <div class="mb-3">
+            <label class="form-label">案件名 <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" maxlength="100"
+              value="{{ project.name|default:'' }}" required placeholder="例：2026年7月シフト">
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label">開始日</label>
+              <input type="date" name="start_date" class="form-control"
+                value="{{ project.start_date|date:'Y-m-d'|default:default_start }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">終了日</label>
+              <input type="date" name="end_date" class="form-control"
+                value="{{ project.end_date|date:'Y-m-d'|default:default_end }}">
+            </div>
+          </div>
+          <div class="mb-0">
+            <label class="form-label">提出期限 <span class="text-danger">*</span></label>
+            <input type="datetime-local" name="deadline" class="form-control"
+              value="{{ project.deadline|date:'Y-m-d\TH:i'|default:'' }}" required>
+          </div>
+        </div>
+      </div>
+
+      <!-- メッセージ設定 -->
+      <div class="section-card">
+        <div class="section-header" onclick="toggleSection(this)">
+          <span><i class="bi bi-chat-text me-2 text-primary"></i>メッセージ設定</span>
+          <i class="bi bi-chevron-down toggle-icon"></i>
+        </div>
+        <div class="section-body" style="display:none;">
+          <div class="mb-3">
+            <label class="form-label">お知らせ（カレンダー上部に表示）</label>
+            <textarea name="info_message" class="form-control" rows="2">{{ project.info_message|default:'' }}</textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">確認画面メッセージ（提出前の確認画面に表示）</label>
+            <textarea name="confirm_message" class="form-control" rows="2">{{ project.confirm_message|default:'' }}</textarea>
+          </div>
+          <div class="mb-0">
+            <label class="form-label">コピー案内メッセージ</label>
+            <textarea name="copy_guide_message" class="form-control" rows="2">{{ project.copy_guide_message|default:'' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- 担当者 -->
+      <div class="section-card">
+        <div class="section-header" onclick="toggleSection(this)">
+          <span><i class="bi bi-person-badge me-2 text-primary"></i>担当者 <span class="badge bg-primary ms-1" id="managerCount">0</span></span>
+          <i class="bi bi-chevron-down toggle-icon"></i>
+        </div>
+        <div class="section-body" style="display:none;">
+          <div id="managerList"></div>
+          <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="addManager()">
+            <i class="bi bi-plus me-1"></i>担当者を追加
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 右カラム -->
+    <div class="col-lg-6">
+
+      <!-- シフト枠設定 -->
+      <div class="section-card">
+        <div class="section-header">
+          <span><i class="bi bi-grid-3x3 me-2 text-primary"></i>シフト枠設定 <span class="badge bg-primary ms-1" id="shiftCount">0</span></span>
+        </div>
+        <div class="section-body">
+          <div class="row g-1 mb-2 text-muted small fw-semibold">
+            <div class="col-1"></div>
+            <div class="col-4">シフト名 *</div>
+            <div class="col-2">略称</div>
+            <div class="col-3">時間帯</div>
+            <div class="col-2"></div>
+          </div>
+          <div id="shiftList"></div>
+          <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="addShiftRow()">
+            <i class="bi bi-plus me-1"></i>シフト枠を追加
+          </button>
+        </div>
+      </div>
+
+      <!-- スタッフ登録 -->
+      <div class="section-card">
+        <div class="section-header" onclick="toggleSection(this)">
+          <span><i class="bi bi-people me-2 text-primary"></i>スタッフ登録 <span class="badge bg-primary ms-1" id="staffCount">0</span></span>
+          <i class="bi bi-chevron-down toggle-icon"></i>
+        </div>
+        <div class="section-body" style="display:none;">
+          <div class="mb-2">
+            <input type="text" id="staffSearch" class="form-control form-control-sm" placeholder="氏名で検索...">
+          </div>
+          <div class="row g-1 mb-1 text-muted small fw-semibold">
+            <div class="col-4">コード</div>
+            <div class="col-6">氏名 *</div>
+            <div class="col-2"></div>
+          </div>
+          <div id="staffList" style="max-height:280px;overflow-y:auto;"></div>
+          <div class="d-flex gap-2 mt-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addStaffRow()">
+              <i class="bi bi-plus me-1"></i>追加
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleCsvImport()">
+              <i class="bi bi-upload me-1"></i>CSVインポート
+            </button>
+          </div>
+          <div id="csvPanel" class="mt-3" style="display:none;">
+            <label class="form-label small">コード・氏名をカンマ/タブ区切りで貼り付け（1行1名）</label>
+            <textarea id="csvText" class="form-control form-control-sm" rows="5"
+              placeholder="001,山田太郎&#10;002,鈴木花子"></textarea>
+            <button type="button" class="btn btn-sm btn-primary mt-2" onclick="importCsv()">
+              <i class="bi bi-check me-1"></i>インポート
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 提出リンク（編集時） -->
+  {% if project %}
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <div class="fw-semibold small mb-2"><i class="bi bi-link-45deg me-1 text-primary"></i>スタッフへの提出リンク</div>
+      <div class="d-flex flex-column gap-2" id="submissionLinks">
+        {% for sub in project.submissions.all %}
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted small">{{ sub.staff.name|default:"（スタッフ未登録）" }}</span>
+          <code class="small bg-light px-2 py-1 rounded flex-grow-1" style="word-break:break-all;">
+            {{ request.scheme }}://{{ request.get_host }}{% url 'shift:staff_submit' sub.token %}
+          </code>
+          <button type="button" class="btn btn-sm btn-outline-secondary"
+            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'shift:staff_submit' sub.token %}')">
+            <i class="bi bi-copy"></i>
+          </button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary px-4">
+      <i class="bi bi-check-lg me-1"></i>保存する
+    </button>
+    <a href="{% url 'shift:project_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+</form>
+
+<!-- カラーピッカーポップアップ -->
+<div id="colorPickerPopup" class="color-picker-popup">
+  <div class="d-flex flex-wrap gap-1" style="width:180px;">
+    {% for color in shift_colors %}
+    <span class="color-swatch" style="background:{{ color }};" onclick="selectColor('{{ color }}')"></span>
+    {% endfor %}
+  </div>
+  <div class="mt-2 d-flex gap-1 align-items-center">
+    <input type="color" id="customColor" class="form-control form-control-sm p-0" style="width:32px;height:32px;border-radius:6px;" value="#2563eb">
+    <button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1" onclick="selectColor(document.getElementById('customColor').value)">選択</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── 初期データ ──
+let shiftTypes = {{ shift_types_json|default:'[]'|safe }};
+let staffList  = {{ staff_json|default:'[]'|safe }};
+let managers   = {{ managers_json|default:'[]'|safe }};
+
+// デフォルトシフト枠（新規作成時）
+if (shiftTypes.length === 0) {
+  shiftTypes = [
+    {id:null,name:'',short_name:'',time_range:'',color:'#2563eb',order:0},
+  ];
+}
+
+let colorTargetIdx = null;
+let colorTargetType = null; // 'shift'
+
+// ── セクション開閉 ──
+function toggleSection(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.toggle-icon');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    icon.classList.replace('bi-chevron-down','bi-chevron-up');
+  } else {
+    body.style.display = 'none';
+    icon.classList.replace('bi-chevron-up','bi-chevron-down');
+  }
+}
+
+// ── シフト枠 ──
+function renderShiftList() {
+  const list = document.getElementById('shiftList');
+  list.innerHTML = '';
+  shiftTypes.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'shift-row';
+    row.innerHTML = `
+      <span class="color-dot" style="background:${s.color};" onclick="openColorPicker(${i}, event)" title="色を変更"></span>
+      <input type="text" class="form-control form-control-sm" placeholder="シフト名" value="${s.name}"
+        oninput="shiftTypes[${i}].name=this.value;updateShiftCount()" style="flex:2;">
+      <input type="text" class="form-control form-control-sm" placeholder="略" value="${s.short_name}"
+        oninput="shiftTypes[${i}].short_name=this.value" maxlength="3" style="flex:0 0 50px;">
+      <input type="text" class="form-control form-control-sm" placeholder="例:9:00-18:00" value="${s.time_range}"
+        oninput="shiftTypes[${i}].time_range=this.value" style="flex:2;">
+      <button type="button" class="btn btn-sm btn-outline-danger px-2" onclick="removeShift(${i})">
+        <i class="bi bi-x"></i>
+      </button>`;
+    list.appendChild(row);
+  });
+  updateShiftCount();
+}
+
+function addShiftRow() {
+  shiftTypes.push({id:null,name:'',short_name:'',time_range:'',color:'#64748b',order:shiftTypes.length});
+  renderShiftList();
+}
+
+function removeShift(i) {
+  shiftTypes.splice(i, 1);
+  renderShiftList();
+}
+
+function updateShiftCount() {
+  const n = shiftTypes.filter(s => s.name.trim()).length;
+  document.getElementById('shiftCount').textContent = n;
+}
+
+// ── カラーピッカー ──
+function openColorPicker(idx, event) {
+  colorTargetIdx = idx;
+  colorTargetType = 'shift';
+  const popup = document.getElementById('colorPickerPopup');
+  popup.style.display = 'block';
+  const rect = event.target.getBoundingClientRect();
+  popup.style.top  = (window.scrollY + rect.bottom + 4) + 'px';
+  popup.style.left = (window.scrollX + rect.left) + 'px';
+  popup.style.position = 'absolute';
+  event.stopPropagation();
+}
+
+function selectColor(color) {
+  if (colorTargetType === 'shift' && colorTargetIdx !== null) {
+    shiftTypes[colorTargetIdx].color = color;
+    renderShiftList();
+  }
+  document.getElementById('colorPickerPopup').style.display = 'none';
+}
+
+document.addEventListener('click', () => {
+  document.getElementById('colorPickerPopup').style.display = 'none';
+});
+
+// ── スタッフ ──
+function renderStaffList(filter='') {
+  const list = document.getElementById('staffList');
+  list.innerHTML = '';
+  staffList.forEach((s, i) => {
+    if (filter && !s.name.includes(filter) && !s.code.includes(filter)) return;
+    const row = document.createElement('div');
+    row.className = 'staff-row';
+    row.innerHTML = `
+      <input type="text" class="form-control form-control-sm" placeholder="コード" value="${s.code}"
+        oninput="staffList[${i}].code=this.value" style="flex:0 0 90px;">
+      <input type="text" class="form-control form-control-sm" placeholder="氏名" value="${s.name}"
+        oninput="staffList[${i}].name=this.value;updateStaffCount()">
+      <button type="button" class="btn btn-sm btn-outline-danger px-2" onclick="removeStaff(${i})">
+        <i class="bi bi-x"></i>
+      </button>`;
+    list.appendChild(row);
+  });
+  updateStaffCount();
+}
+
+function addStaffRow() {
+  staffList.push({id:null,code:'',name:''});
+  renderStaffList();
+  // 最後の行にフォーカス
+  const inputs = document.querySelectorAll('#staffList input[placeholder="氏名"]');
+  if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+function removeStaff(i) {
+  staffList.splice(i, 1);
+  renderStaffList();
+}
+
+function updateStaffCount() {
+  const n = staffList.filter(s => s.name.trim()).length;
+  document.getElementById('staffCount').textContent = n;
+}
+
+document.getElementById('staffSearch').addEventListener('input', function() {
+  renderStaffList(this.value.trim());
+});
+
+// CSV インポート
+function toggleCsvImport() {
+  const p = document.getElementById('csvPanel');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+}
+
+function importCsv() {
+  const text = document.getElementById('csvText').value.trim();
+  if (!text) return;
+  const lines = text.split('\n');
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  let added = 0;
+  lines.forEach(line => {
+    line = line.trim();
+    if (!line) return;
+    const parts = line.split(delim);
+    const code = (parts[0] || '').trim();
+    const name = (parts[1] || parts[0] || '').trim();
+    if (!name) return;
+    // コード重複チェック
+    if (code && staffList.some(s => s.code === code)) return;
+    staffList.push({id:null, code: parts.length>1?code:'', name: parts.length>1?name:code});
+    added++;
+  });
+  renderStaffList();
+  document.getElementById('csvText').value = '';
+  document.getElementById('csvPanel').style.display = 'none';
+  alert(`${added} 名をインポートしました。`);
+}
+
+// ── 担当者 ──
+function renderManagers() {
+  const list = document.getElementById('managerList');
+  list.innerHTML = '';
+  managers.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = 'staff-row';
+    row.innerHTML = `
+      <input type="text" class="form-control form-control-sm" placeholder="役割（例：店長）" value="${m.role}"
+        oninput="managers[${i}].role=this.value" style="flex:0 0 110px;">
+      <input type="text" class="form-control form-control-sm" placeholder="氏名" value="${m.name}"
+        oninput="managers[${i}].name=this.value;updateManagerCount()">
+      <button type="button" class="btn btn-sm btn-outline-danger px-2" onclick="removeManager(${i})">
+        <i class="bi bi-x"></i>
+      </button>`;
+    list.appendChild(row);
+  });
+  updateManagerCount();
+}
+
+function addManager() {
+  managers.push({id:null,role:'',name:''});
+  renderManagers();
+}
+
+function removeManager(i) {
+  managers.splice(i, 1);
+  renderManagers();
+}
+
+function updateManagerCount() {
+  document.getElementById('managerCount').textContent = managers.filter(m=>m.name.trim()).length;
+}
+
+// ── フォーム送信 ──
+document.getElementById('projectForm').addEventListener('submit', function(e) {
+  document.getElementById('shiftTypesJson').value = JSON.stringify(shiftTypes);
+  document.getElementById('staffJson').value = JSON.stringify(staffList);
+  document.getElementById('managersJson').value = JSON.stringify(managers);
+});
+
+// ── 初期レンダリング ──
+renderShiftList();
+renderStaffList();
+renderManagers();
+</script>
+{% endblock %}

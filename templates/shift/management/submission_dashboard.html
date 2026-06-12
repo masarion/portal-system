@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block title %}提出状況 - {{ project.name }}{% endblock %}
+{% block nav_shift %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-3">
+    <a href="{% url 'shift:project_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></a>
+    <div>
+      <h2 class="mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>提出状況</h2>
+      <div class="text-muted small mt-1">{{ project.name }}
+        {% if project.start_date and project.end_date %}
+        ・{{ project.start_date|date:"Y/m/d" }} 〜 {{ project.end_date|date:"Y/m/d" }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'shift:submission_schedule' project.pk %}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-table me-1"></i>一覧表
+    </a>
+    <a href="{% url 'shift:export_excel' project.pk %}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel
+    </a>
+  </div>
+</div>
+
+<!-- 集計カード -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="stat-value text-primary">{{ total }}</div>
+      <div class="stat-label">登録スタッフ数</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="stat-value text-success">{{ submitted_count }}</div>
+      <div class="stat-label">提出済み</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="stat-value {% if unsubmitted_count > 0 %}text-warning{% else %}text-success{% endif %}">{{ unsubmitted_count }}</div>
+      <div class="stat-label">未提出</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="stat-value {% if is_past_deadline %}text-secondary{% else %}text-primary{% endif %}">
+        {% if is_past_deadline %}締切済{% else %}受付中{% endif %}
+      </div>
+      <div class="stat-label">{{ project.deadline|date:"m/d H:i" }} 締切</div>
+    </div>
+  </div>
+</div>
+
+{% if total > 0 %}
+<div class="mb-3">
+  <div class="progress" style="height:8px;border-radius:99px;">
+    <div class="progress-bar bg-success" style="width:{% widthratio submitted_count total 100 %}%;border-radius:99px;"></div>
+  </div>
+  <div class="text-muted small mt-1">{{ submitted_count }} / {{ total }} 名 提出済み</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if submissions %}
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th class="ps-4">氏名</th>
+          <th>コード</th>
+          <th class="text-center">状態</th>
+          <th class="text-center">提出日時</th>
+          <th class="text-center">入力日数</th>
+          <th class="pe-4">特記事項</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in submissions %}
+        <tr>
+          <td class="ps-4 fw-semibold">{{ sub.staff.name|default:"―" }}</td>
+          <td class="text-muted small font-monospace">{{ sub.staff.code|default:"―" }}</td>
+          <td class="text-center">
+            {% if sub.submitted %}
+              <span class="text-success fw-semibold small">提出済み</span>
+            {% else %}
+              <span class="text-warning fw-semibold small">未提出</span>
+            {% endif %}
+          </td>
+          <td class="text-center text-muted small">
+            {{ sub.submitted_at|date:"m/d H:i"|default:"―" }}
+          </td>
+          <td class="text-center text-muted small">
+            {% if sub.submitted %}{{ sub.selections.count }}日{% else %}―{% endif %}
+          </td>
+          <td class="pe-4 text-muted small">
+            {% if sub.notes %}
+            <span title="{{ sub.notes }}"><i class="bi bi-chat-text me-1"></i>{{ sub.notes|truncatechars:30 }}</span>
+            {% else %}―{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-1 d-block mb-3 opacity-25"></i>
+      スタッフが登録されていません
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

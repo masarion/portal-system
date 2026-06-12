@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}案件一覧 - シフト管理{% endblock %}
+{% block nav_shift %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h2><i class="bi bi-calendar3 me-2 text-primary"></i>シフト管理 - 案件一覧</h2>
+  <a href="{% url 'shift:project_create' %}" class="btn btn-success d-flex align-items-center gap-2">
+    <i class="bi bi-plus-lg"></i> 案件を作成
+  </a>
+</div>
+
+{% if project_data %}
+<div class="row g-3">
+  {% for item in project_data %}
+  {% with p=item.project %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex align-items-start gap-3 flex-wrap">
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <h5 class="mb-0 fw-700" style="font-size:1rem;">{{ p.name }}</h5>
+              {% if item.is_past_deadline %}
+                <span class="badge bg-secondary fw-normal">締切済み</span>
+              {% else %}
+                <span class="badge bg-success fw-normal">受付中</span>
+              {% endif %}
+            </div>
+            <div class="text-muted small d-flex flex-wrap gap-3 mt-1">
+              {% if p.start_date and p.end_date %}
+              <span><i class="bi bi-calendar-range me-1"></i>{{ p.start_date|date:"Y/m/d" }} 〜 {{ p.end_date|date:"Y/m/d" }}</span>
+              {% endif %}
+              <span><i class="bi bi-alarm me-1"></i>提出期限：{{ p.deadline|date:"Y/m/d H:i" }}</span>
+              <span><i class="bi bi-people me-1"></i>{{ item.total_staff }} 名登録</span>
+            </div>
+            <div class="mt-2 d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height:6px;max-width:200px;border-radius:99px;">
+                {% if item.total_staff > 0 %}
+                <div class="progress-bar bg-primary" style="width:{% widthratio item.submitted_count item.total_staff 100 %}%"></div>
+                {% endif %}
+              </div>
+              <span class="small text-muted">提出 {{ item.submitted_count }} / {{ item.total_staff }} 名</span>
+            </div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'shift:submission_dashboard' p.pk %}" class="btn btn-sm btn-primary d-flex align-items-center gap-1">
+              <i class="bi bi-speedometer2"></i> 提出状況
+            </a>
+            <a href="{% url 'shift:submission_schedule' p.pk %}" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1">
+              <i class="bi bi-table"></i> 一覧表
+            </a>
+            <a href="{% url 'shift:export_excel' p.pk %}" class="btn btn-sm btn-outline-success d-flex align-items-center gap-1">
+              <i class="bi bi-file-earmark-excel"></i> Excel
+            </a>
+            <a href="{% url 'shift:project_edit' p.pk %}" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1">
+              <i class="bi bi-pencil"></i> 編集
+            </a>
+            <a href="{% url 'shift:project_delete' p.pk %}" class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1">
+              <i class="bi bi-trash"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endwith %}
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body text-center text-muted py-5">
+    <i class="bi bi-calendar-plus fs-1 d-block mb-3 opacity-25"></i>
+    <p class="mb-3">案件がまだ登録されていません</p>
+    <a href="{% url 'shift:project_create' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>最初の案件を作成
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

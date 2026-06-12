@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}案件削除 - シフト管理{% endblock %}
+{% block nav_shift %}active{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center gap-3">
+  <a href="{% url 'shift:project_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></a>
+  <h2 class="mb-0"><i class="bi bi-trash me-2 text-danger"></i>案件を削除</h2>
+</div>
+<div class="card" style="max-width:500px;">
+  <div class="card-body">
+    <p class="mb-1">以下の案件を削除します。この操作は取り消せません。</p>
+    <p class="fw-bold fs-5 mb-3">「{{ project.name }}」</p>
+    <p class="text-muted small mb-4">提出済みのシフトデータもすべて削除されます。</p>
+    <form method="post" class="d-flex gap-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>削除する</button>
+      <a href="{% url 'shift:project_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+    </form>
+  </div>
+</div>
+{% endblock %}
