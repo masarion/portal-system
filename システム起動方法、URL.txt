@@ -1,0 +1,49 @@
+システム起動方法、URL
+---------------------
+localhost
+
+ユーザー名：
+admin
+
+Pass:
+admin1234
+
+PowerShellで以下を実行：
+
+cd "C:\Users\User\Desktop\システム開発\My Job\portal-system
+python manage.py runserver
+
+ブラウザで
+http://localhost:8000/　にアクセス。
+
+または、PowerShellで以下を実行：
+
+python manage.py runserver 8001
+
+ブラウザで
+http://localhost:8001/
+にアクセス。
+
+終了するときは PowerShell 上で
+Ctrl + C
+です。
+
+
+-------------------------
+
+Render
+
+ユーザー名：
+abc
+
+Pass:
+1100
+
+ログイン
+https://portal-system-t8bg.onrender.com/accounts/login/
+
+ポータルトップ
+https://portal-system-t8bg.onrender.com/portal/
+
+シフト案件一覧
+https://portal-system-t8bg.onrender.com/shift/

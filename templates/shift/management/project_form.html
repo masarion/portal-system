@@ -186,21 +186,180 @@
   </div>
 
   <!-- 提出リンク（編集時・案件ごとに1URL） -->
-  {% if project %}
-  {% with submit_url=request.scheme|add:"://"|add:request.get_host|add:"/shift/submit/"|add:project.submit_token|stringformat:"s"|add:"/" %}
+  {% if project and submit_url %}
   <div class="card mb-3">
     <div class="card-body py-3">
       <div class="fw-semibold small mb-2"><i class="bi bi-link-45deg me-1 text-primary"></i>スタッフへの提出リンク（全員共通）</div>
-      <div class="d-flex align-items-center gap-2">
+      <div class="d-flex align-items-center gap-2 mb-3">
         <code class="small bg-light px-2 py-1 rounded flex-grow-1" style="word-break:break-all;">{{ submit_url }}</code>
         <button type="button" class="btn btn-sm btn-outline-secondary"
           onclick="navigator.clipboard.writeText('{{ submit_url }}');this.innerHTML='<i class=\'bi bi-check\'></i>';">
           <i class="bi bi-copy"></i>
         </button>
       </div>
+      <div class="d-flex align-items-end gap-3">
+        <img id="qrCodeImg" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={{ submit_url|urlencode }}"
+             alt="QRコード" style="border-radius:8px;border:1px solid #e2e8f0;">
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#printModal">
+          <i class="bi bi-printer me-1"></i>印刷
+        </button>
+      </div>
     </div>
   </div>
-  {% endwith %}
+  {% endif %}
+
+  <iframe id="printFrame" style="display:none;"></iframe>
+
+  <!-- 印刷プレビューモーダル -->
+  {% if project and submit_url %}
+  <div class="modal fade" id="printModal" tabindex="-1" aria-labelledby="printModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h5 class="modal-title fw-semibold" id="printModalLabel"><i class="bi bi-printer me-2 text-primary"></i>印刷プレビュー</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0">
+          <div class="d-flex" style="min-height:600px;">
+
+            <!-- 左：編集パネル -->
+            <div style="width:320px;flex-shrink:0;border-right:1px solid #e2e8f0;overflow-y:auto;padding:1rem;">
+
+              <!-- 表題 -->
+              <div class="mb-4">
+                <div class="fw-semibold small text-primary mb-2"><i class="bi bi-type me-1"></i>表題</div>
+                <input type="text" id="pt-title" class="form-control form-control-sm mb-2" value="{{ project.name|escapejs }}">
+                <div class="d-flex gap-2 mb-2">
+                  <select id="pt-title-size" class="form-select form-select-sm">
+                    <option value="14">小 (14px)</option>
+                    <option value="20" selected>中 (20px)</option>
+                    <option value="26">大 (26px)</option>
+                    <option value="32">特大 (32px)</option>
+                  </select>
+                  <select id="pt-title-weight" class="form-select form-select-sm">
+                    <option value="400">標準</option>
+                    <option value="700" selected>太字</option>
+                  </select>
+                </div>
+                <div id="pt-title-color-wrap"></div>
+              </div>
+
+              <!-- 自由入力 -->
+              <div class="mb-4">
+                <div class="fw-semibold small text-primary mb-2"><i class="bi bi-text-left me-1"></i>自由入力（任意）</div>
+                <textarea id="pt-body" class="form-control form-control-sm mb-2" rows="3" placeholder="例：〇〇月のシフト希望をご提出ください"></textarea>
+                <div class="d-flex gap-2 mb-2">
+                  <select id="pt-body-size" class="form-select form-select-sm">
+                    <option value="10">小 (10px)</option>
+                    <option value="13" selected>中 (13px)</option>
+                    <option value="16">大 (16px)</option>
+                    <option value="20">特大 (20px)</option>
+                  </select>
+                  <select id="pt-body-weight" class="form-select form-select-sm">
+                    <option value="400" selected>標準</option>
+                    <option value="700">太字</option>
+                  </select>
+                </div>
+                <div id="pt-body-color-wrap"></div>
+              </div>
+
+              <!-- QRサイズ -->
+              <div class="mb-4">
+                <div class="fw-semibold small text-primary mb-2"><i class="bi bi-qr-code me-1"></i>QRコードサイズ</div>
+                <div class="d-flex align-items-center gap-2">
+                  <input type="range" id="pt-qr-size" class="form-range flex-grow-1" min="80" max="280" step="10" value="160">
+                  <span id="pt-qr-size-label" class="small text-muted" style="width:50px;text-align:right;">160px</span>
+                </div>
+              </div>
+
+              <!-- QRコード中央に挿入 -->
+              <div class="mb-4">
+                <div class="fw-semibold small text-primary mb-2"><i class="bi bi-image me-1"></i>QRコード中央に挿入（任意）</div>
+                <div class="d-flex gap-3 mb-2 small">
+                  <label class="d-flex align-items-center gap-1 cursor-pointer">
+                    <input type="radio" name="pt-overlay-type" value="none" checked onchange="onOverlayTypeChange()"> なし
+                  </label>
+                  <label class="d-flex align-items-center gap-1 cursor-pointer">
+                    <input type="radio" name="pt-overlay-type" value="text" onchange="onOverlayTypeChange()"> テキスト
+                  </label>
+                  <label class="d-flex align-items-center gap-1 cursor-pointer">
+                    <input type="radio" name="pt-overlay-type" value="image" onchange="onOverlayTypeChange()"> 画像
+                  </label>
+                </div>
+                <div id="pt-overlay-text-wrap" style="display:none;">
+                  <input type="text" id="pt-overlay-text" class="form-control form-control-sm mb-2" maxlength="6" placeholder="例：会社名">
+                  <div class="d-flex gap-2 mb-2">
+                    <select id="pt-overlay-text-size" class="form-select form-select-sm">
+                      <option value="small">小</option>
+                      <option value="medium" selected>中</option>
+                      <option value="large">大</option>
+                    </select>
+                  </div>
+                  <div id="pt-overlay-text-color-wrap"></div>
+                </div>
+                <div id="pt-overlay-image-wrap" style="display:none;">
+                  <label class="btn btn-sm btn-outline-secondary w-100">
+                    <i class="bi bi-upload me-1"></i>画像を選択（PNG / JPG / SVG）
+                    <input type="file" id="pt-overlay-image" accept="image/png,image/jpeg,image/svg+xml" style="display:none;" onchange="onOverlayImageChange(this)">
+                  </label>
+                  <div id="pt-overlay-image-preview" class="mt-2 text-center" style="display:none;">
+                    <img id="pt-overlay-image-thumb" src="" alt="" style="max-height:48px;border-radius:4px;border:1px solid #e2e8f0;">
+                  </div>
+                </div>
+                <p class="text-muted" style="font-size:10px;margin-top:6px;margin-bottom:0;">※ QRコードの中央部（面積の約20%以内）に白丸で挿入されます。大きすぎると読み取れなくなるため自動的にサイズを制限します。</p>
+              </div>
+
+              <!-- 注意事項 -->
+              <div class="mb-2">
+                <div class="fw-semibold small text-primary mb-2"><i class="bi bi-exclamation-circle me-1"></i>注意事項（任意）</div>
+                <textarea id="pt-note" class="form-control form-control-sm mb-2" rows="3" placeholder="例：提出期限は〇月〇日です"></textarea>
+                <div class="d-flex gap-2 mb-2">
+                  <select id="pt-note-size" class="form-select form-select-sm">
+                    <option value="9">小 (9px)</option>
+                    <option value="12" selected>中 (12px)</option>
+                    <option value="15">大 (15px)</option>
+                    <option value="18">特大 (18px)</option>
+                  </select>
+                  <select id="pt-note-weight" class="form-select form-select-sm">
+                    <option value="400" selected>標準</option>
+                    <option value="700">太字</option>
+                  </select>
+                </div>
+                <div id="pt-note-color-wrap"></div>
+              </div>
+
+            </div>
+
+            <!-- 右：A4プレビュー -->
+            <div class="flex-grow-1 d-flex align-items-start justify-content-center" style="background:#f0f2f5;padding:2rem;overflow:auto;">
+              <div id="printPreview" style="
+                width:210mm; min-height:297mm;
+                background:#fff;
+                box-shadow:0 4px 24px rgba(0,0,0,.15);
+                border-radius:4px;
+                padding:20mm 15mm;
+                display:flex; flex-direction:column; align-items:center; justify-content:center;
+                font-family:'Noto Sans JP',sans-serif;
+                box-sizing:border-box;
+              ">
+                <div id="prev-title" style="text-align:center;margin-bottom:12px;"></div>
+                <div id="prev-body" style="text-align:center;margin-bottom:20px;white-space:pre-wrap;"></div>
+                <canvas id="prev-qr" style="border-radius:8px;border:1px solid #e2e8f0;margin-bottom:20px;"></canvas>
+                <div id="prev-note" style="text-align:center;white-space:pre-wrap;"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">閉じる</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="executePrint()">
+            <i class="bi bi-printer me-1"></i>印刷する
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   {% endif %}
 
   <div class="d-flex gap-2">
@@ -449,5 +608,264 @@ document.getElementById('projectForm').addEventListener('submit', function(e) {
 renderShiftList();
 renderStaffList();
 renderManagers();
+
+// ── 印刷プレビュー ──
+const QR_DATA_URL = '{{ submit_url|urlencode }}';
+const QR_API = 'https://api.qrserver.com/v1/create-qr-code/?data=' + QR_DATA_URL + '&size=';
+const BASIC_COLORS = [
+  '#000000','#333333','#555555','#888888','#aaaaaa','#cccccc','#ffffff',
+  '#c0392b','#e74c3c','#e67e22','#f39c12','#f1c40f','#2ecc71','#27ae60',
+  '#1abc9c','#16a085','#3498db','#2980b9','#2c3e50','#2e86c1','#1a5276',
+  '#8e44ad','#6c3483','#d35400','#a04000','#117a65','#0e6655','#1f618d',
+  '#7d6608','#6e2f1a',
+];
+
+// 色管理
+const textColors = { title: '#000000', body: '#333333', note: '#555555', overlay: '#000000' };
+
+// オーバーレイ用アップロード画像
+let overlayImageDataUrl = null;
+
+function buildColorPicker(wrapperId, colorKey, onChange) {
+  const wrap = document.getElementById(wrapperId);
+  if (!wrap) return;
+  const defaultColor = textColors[colorKey];
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;';
+  BASIC_COLORS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.style.cssText = `width:20px;height:20px;border-radius:4px;background:${c};cursor:pointer;border:2px solid ${c === defaultColor ? '#2563eb' : 'transparent'};box-sizing:border-box;flex-shrink:0;`;
+    sw.title = c;
+    sw.onclick = () => {
+      grid.querySelectorAll('div').forEach(s => s.style.borderColor = 'transparent');
+      sw.style.borderColor = '#2563eb';
+      customInput.value = c;
+      textColors[colorKey] = c;
+      onChange(c);
+    };
+    grid.appendChild(sw);
+  });
+
+  const customRow = document.createElement('div');
+  customRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+  const customLabel = document.createElement('span');
+  customLabel.textContent = 'その他';
+  customLabel.style.cssText = 'font-size:11px;color:#555;white-space:nowrap;';
+  const customInput = document.createElement('input');
+  customInput.type = 'color';
+  customInput.value = defaultColor;
+  customInput.style.cssText = 'width:32px;height:28px;padding:0;border:1px solid #ccc;border-radius:4px;cursor:pointer;';
+  customInput.oninput = () => {
+    grid.querySelectorAll('div').forEach(s => s.style.borderColor = 'transparent');
+    textColors[colorKey] = customInput.value;
+    onChange(customInput.value);
+  };
+  customRow.appendChild(customLabel);
+  customRow.appendChild(customInput);
+  wrap.appendChild(grid);
+  wrap.appendChild(customRow);
+}
+
+// QR＋オーバーレイ合成をCanvasに描画
+function drawQRCanvas(canvas, qrSizePx, overlayType, overlayText, overlayTextSize, overlayImageDataUrl, onDone) {
+  const renderSize = 400; // 高解像度で合成
+  canvas.width = qrSizePx;
+  canvas.height = qrSizePx;
+  const ctx = canvas.getContext('2d');
+
+  const qrImg = new Image();
+  qrImg.crossOrigin = 'anonymous';
+  qrImg.src = QR_API + renderSize + 'x' + renderSize;
+  qrImg.onload = () => {
+    ctx.drawImage(qrImg, 0, 0, qrSizePx, qrSizePx);
+
+    if (overlayType === 'none') { if (onDone) onDone(); return; }
+
+    // オーバーレイ円のサイズ: QRコード面積の20%以内 → 直径 = QRサイズ × √0.20 ≒ 0.447
+    const circleDiam = Math.floor(qrSizePx * 0.42);
+    const circleR = circleDiam / 2;
+    const cx = qrSizePx / 2;
+    const cy = qrSizePx / 2;
+
+    // 白丸背景
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, circleR, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.restore();
+
+    if (overlayType === 'text' && overlayText) {
+      const fontSizeMap = { small: Math.floor(circleDiam * 0.18), medium: Math.floor(circleDiam * 0.26), large: Math.floor(circleDiam * 0.34) };
+      const fs = fontSizeMap[overlayTextSize] || fontSizeMap.medium;
+      ctx.save();
+      ctx.font = `bold ${fs}px sans-serif`;
+      ctx.fillStyle = textColors.overlay;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // 長い場合は折り返し（最大2行）
+      const maxW = circleDiam * 0.82;
+      const words = overlayText.split('');
+      let line = '', lines = [];
+      words.forEach(ch => {
+        const test = line + ch;
+        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = ch; }
+        else line = test;
+      });
+      if (line) lines.push(line);
+      lines = lines.slice(0, 2);
+      const lineH = fs * 1.2;
+      const startY = cy - (lines.length - 1) * lineH / 2;
+      lines.forEach((l, i) => ctx.fillText(l, cx, startY + i * lineH));
+      ctx.restore();
+      if (onDone) onDone();
+
+    } else if (overlayType === 'image' && overlayImageDataUrl) {
+      const oImg = new Image();
+      oImg.onload = () => {
+        const maxDraw = circleDiam * 0.78;
+        const scale = Math.min(maxDraw / oImg.width, maxDraw / oImg.height);
+        const dw = oImg.width * scale;
+        const dh = oImg.height * scale;
+        ctx.drawImage(oImg, cx - dw / 2, cy - dh / 2, dw, dh);
+        if (onDone) onDone();
+      };
+      oImg.src = overlayImageDataUrl;
+    } else {
+      if (onDone) onDone();
+    }
+  };
+}
+
+function getOverlayState() {
+  const type = document.querySelector('input[name="pt-overlay-type"]:checked')?.value || 'none';
+  const text = document.getElementById('pt-overlay-text')?.value || '';
+  const textSize = document.getElementById('pt-overlay-text-size')?.value || 'medium';
+  return { type, text, textSize };
+}
+
+function updatePreview() {
+  // 表題
+  const titleEl = document.getElementById('prev-title');
+  titleEl.textContent = document.getElementById('pt-title').value;
+  titleEl.style.fontSize = document.getElementById('pt-title-size').value + 'px';
+  titleEl.style.fontWeight = document.getElementById('pt-title-weight').value;
+  titleEl.style.color = textColors.title;
+
+  // 自由入力
+  const bodyEl = document.getElementById('prev-body');
+  bodyEl.textContent = document.getElementById('pt-body').value;
+  bodyEl.style.fontSize = document.getElementById('pt-body-size').value + 'px';
+  bodyEl.style.fontWeight = document.getElementById('pt-body-weight').value;
+  bodyEl.style.color = textColors.body;
+
+  // QRサイズ
+  const qrSize = parseInt(document.getElementById('pt-qr-size').value);
+  document.getElementById('pt-qr-size-label').textContent = qrSize + 'px';
+
+  // Canvas に QR＋オーバーレイを描画
+  const canvas = document.getElementById('prev-qr');
+  const { type, text, textSize } = getOverlayState();
+  drawQRCanvas(canvas, qrSize, type, text, textSize, overlayImageDataUrl);
+
+  // 注意事項
+  const noteEl = document.getElementById('prev-note');
+  noteEl.textContent = document.getElementById('pt-note').value;
+  noteEl.style.fontSize = document.getElementById('pt-note-size').value + 'px';
+  noteEl.style.fontWeight = document.getElementById('pt-note-weight').value;
+  noteEl.style.color = textColors.note;
+}
+
+function onOverlayTypeChange() {
+  const type = document.querySelector('input[name="pt-overlay-type"]:checked')?.value;
+  document.getElementById('pt-overlay-text-wrap').style.display = type === 'text' ? '' : 'none';
+  document.getElementById('pt-overlay-image-wrap').style.display = type === 'image' ? '' : 'none';
+  updatePreview();
+}
+
+function onOverlayImageChange(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    overlayImageDataUrl = e.target.result;
+    document.getElementById('pt-overlay-image-thumb').src = overlayImageDataUrl;
+    document.getElementById('pt-overlay-image-preview').style.display = '';
+    updatePreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function executePrint() {
+  const titleText = document.getElementById('pt-title').value;
+  const bodyText  = document.getElementById('pt-body').value;
+  const noteText  = document.getElementById('pt-note').value;
+  const qrSize    = parseInt(document.getElementById('pt-qr-size').value);
+  const { type, text, textSize } = getOverlayState();
+
+  const titleEl = document.getElementById('prev-title');
+  const bodyEl  = document.getElementById('prev-body');
+  const noteEl  = document.getElementById('prev-note');
+  const titleStyle = `font-size:${titleEl.style.fontSize};font-weight:${titleEl.style.fontWeight};color:${textColors.title};`;
+  const bodyStyle  = `font-size:${bodyEl.style.fontSize};font-weight:${bodyEl.style.fontWeight};color:${textColors.body};`;
+  const noteStyle  = `font-size:${noteEl.style.fontSize};font-weight:${noteEl.style.fontWeight};color:${textColors.note};`;
+
+  const escHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // 印刷用に高解像度Canvasで合成してDataURLにする
+  const printCanvas = document.createElement('canvas');
+  const printPx = Math.max(qrSize * 2, 400);
+  drawQRCanvas(printCanvas, printPx, type, text, textSize, overlayImageDataUrl, () => {
+    const qrDataUrl = printCanvas.toDataURL('image/png');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+      * { box-sizing:border-box; margin:0; padding:0; }
+      body { font-family:'Noto Sans JP',sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:20mm 15mm; }
+      .title { text-align:center; margin-bottom:12px; ${titleStyle} }
+      .body-text { text-align:center; margin-bottom:20px; white-space:pre-wrap; ${bodyStyle} }
+      .qr { margin-bottom:20px; }
+      .qr img { display:block; border-radius:8px; border:1px solid #e2e8f0; width:${qrSize}px; height:${qrSize}px; }
+      .note { text-align:center; white-space:pre-wrap; ${noteStyle} }
+      @media print { @page { size:A4; margin:10mm; } }
+    </style></head><body>
+    ${titleText ? `<div class="title">${escHtml(titleText)}</div>` : ''}
+    ${bodyText  ? `<div class="body-text">${escHtml(bodyText)}</div>` : ''}
+    <div class="qr"><img src="${qrDataUrl}" alt="QR"></div>
+    ${noteText  ? `<div class="note">${escHtml(noteText)}</div>` : ''}
+    </body></html>`;
+
+    const frame = document.getElementById('printFrame');
+    frame.onload = () => { frame.contentWindow.focus(); frame.contentWindow.print(); };
+    frame.srcdoc = html;
+  });
+}
+
+// モーダルが開いたときに初期化
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('printModal');
+  if (!modal) return;
+
+  // カラーピッカーを組み立て
+  buildColorPicker('pt-title-color-wrap',   'title',   c => { textColors.title   = c; updatePreview(); });
+  buildColorPicker('pt-body-color-wrap',    'body',    c => { textColors.body    = c; updatePreview(); });
+  buildColorPicker('pt-note-color-wrap',    'note',    c => { textColors.note    = c; updatePreview(); });
+  buildColorPicker('pt-overlay-text-color-wrap', 'overlay', c => { textColors.overlay = c; updatePreview(); });
+
+  // 初期プレビュー
+  updatePreview();
+
+  // 入力系イベント
+  ['pt-title','pt-title-size','pt-title-weight',
+   'pt-body','pt-body-size','pt-body-weight',
+   'pt-qr-size',
+   'pt-note','pt-note-size','pt-note-weight',
+   'pt-overlay-text','pt-overlay-text-size',
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updatePreview);
+  });
+});
 </script>
 {% endblock %}

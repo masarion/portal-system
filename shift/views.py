@@ -75,8 +75,9 @@ def project_edit(request, pk):
     if request.method == 'POST':
         return _save_project(request, project)
     shift_types = list(project.shift_types.values('id', 'name', 'short_name', 'time_range', 'color', 'order'))
-    staff_list = list(project.staff_members.values('id', 'code', 'name'))
+    staff_list = list(project.staff_members.values('id', 'code', 'name', 'password'))
     managers = list(project.managers.values('id', 'role', 'name'))
+    submit_url = request.build_absolute_uri(f'/shift/submit/{project.submit_token}/')
     return render(request, 'shift/management/project_form.html', {
         'page_title': '案件を編集',
         'project': project,
@@ -86,6 +87,7 @@ def project_edit(request, pk):
         'shift_colors': SHIFT_COLORS,
         'default_start': '',
         'default_end': '',
+        'submit_url': submit_url,
     })
 
 
