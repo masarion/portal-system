@@ -48,12 +48,12 @@
             <div class="col-6">
               <label class="form-label">開始日</label>
               <input type="date" name="start_date" class="form-control"
-                value="{{ project.start_date|date:'Y-m-d'|default:default_start }}">
+                value="{{ project.start_date|date:'Y-m-d'|default:default_start|default:'' }}">
             </div>
             <div class="col-6">
               <label class="form-label">終了日</label>
               <input type="date" name="end_date" class="form-control"
-                value="{{ project.end_date|date:'Y-m-d'|default:default_end }}">
+                value="{{ project.end_date|date:'Y-m-d'|default:default_end|default:'' }}">
             </div>
           </div>
           <div class="mb-0">
