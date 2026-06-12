@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from .models import Manager, Project, ShiftSelection, ShiftType, Staff, Submission
+from .models import Manager, Project, ShiftSelection, ShiftType, Staff, Submission, normalize_name
 
 
 def is_staff_user(user):
@@ -94,6 +94,7 @@ def _save_project(request, project):
     deadline = request.POST.get('deadline', '').strip()
     start_date = request.POST.get('start_date', '').strip() or None
     end_date = request.POST.get('end_date', '').strip() or None
+    auth_mode = request.POST.get('auth_mode', Project.AUTH_NAME)
     info_message = request.POST.get('info_message', '').strip()
     copy_guide_message = request.POST.get('copy_guide_message', '').strip()
     confirm_message = request.POST.get('confirm_message', '').strip()
@@ -106,6 +107,7 @@ def _save_project(request, project):
         project = Project()
 
     project.name = name
+    project.auth_mode = auth_mode
     project.deadline = deadline
     project.start_date = start_date
     project.end_date = end_date
@@ -142,14 +144,20 @@ def _save_project(request, project):
                 st = project.staff_members.get(pk=sid)
                 st.code = s.get('code', '').strip()
                 st.name = name_val
+                if auth_mode == Project.AUTH_CODE and s.get('password', '').strip():
+                    st.password = s['password'].strip()
                 st.save()
                 posted_ids.add(st.pk)
                 continue
             except Staff.DoesNotExist:
                 pass
-        st = Staff.objects.create(project=project, code=s.get('code', '').strip(), name=name_val)
+        st = Staff.objects.create(
+            project=project,
+            code=s.get('code', '').strip(),
+            name=name_val,
+            password=s.get('password', '').strip() if auth_mode == Project.AUTH_CODE else '',
+        )
         posted_ids.add(st.pk)
-    # 削除されたスタッフ
     for sid in existing_staff_ids - posted_ids:
         Staff.objects.filter(pk=sid).delete()
 
@@ -160,22 +168,8 @@ def _save_project(request, project):
         if m.get('name', '').strip():
             Manager.objects.create(project=project, role=m.get('role', '').strip(), name=m['name'].strip())
 
-    # スタッフ登録があれば各スタッフのSubmissionを作成（なければ1件だけ）
-    _ensure_submissions(project)
-
     messages.success(request, f'案件「{project.name}」を保存しました。')
     return redirect('shift:project_list')
-
-
-def _ensure_submissions(project):
-    staff_qs = project.staff_members.all()
-    if staff_qs.exists():
-        for staff in staff_qs:
-            Submission.objects.get_or_create(project=project, staff=staff)
-        # スタッフなし提出を削除
-        project.submissions.filter(staff__isnull=True).delete()
-    else:
-        Submission.objects.get_or_create(project=project, staff=None)
 
 
 @login_required
@@ -331,24 +325,77 @@ def export_excel(request, pk):
     return response
 
 
-# ── スタッフ提出画面（ログイン不要） ──────────────────────────────────────────────
+# ── スタッフ提出画面（ログイン不要・案件ごとに1URL） ─────────────────────────────
 
 def staff_submit(request, token):
-    submission = get_object_or_404(Submission, token=token)
-    project = submission.project
-    dates = project.get_dates()
-    shift_types = project.shift_types.all()
+    """案件トークンでアクセス→認証モードに応じて処理"""
+    project = get_object_or_404(Project, submit_token=token)
+    is_past_deadline = project.deadline < timezone.now()
 
-    # 既存の選択データを取得
+    if project.auth_mode == Project.AUTH_CODE:
+        # コード＋パスワードモード：認証画面へ
+        return render(request, 'shift/staff_auth.html', {
+            'project': project,
+            'token': token,
+            'is_past_deadline': is_past_deadline,
+        })
+    else:
+        # 名前入力モード：名前入力＋カレンダーを同時表示
+        # セッションから前回の名前を取得
+        staff_name = request.session.get(f'staff_name_{project.pk}', '')
+        submission = None
+        existing = {}
+        if staff_name:
+            staff = project.staff_members.filter(name=staff_name).first()
+            if staff:
+                submission, _ = Submission.objects.get_or_create(project=project, staff=staff)
+                for sel in submission.selections.prefetch_related('shift_types').all():
+                    existing[sel.date.isoformat()] = [st.pk for st in sel.shift_types.all()]
+
+        return render(request, 'shift/staff_submit.html', {
+            'project': project,
+            'token': token,
+            'submission': submission,
+            'staff_name': staff_name,
+            'dates': project.get_dates(),
+            'shift_types': project.shift_types.all(),
+            'existing_json': json.dumps(existing),
+            'is_past_deadline': is_past_deadline,
+        })
+
+
+def staff_auth(request, token):
+    """コード＋パスワード認証処理（POST）"""
+    project = get_object_or_404(Project, submit_token=token)
+    if request.method != 'POST':
+        return redirect('shift:staff_submit', token=token)
+
+    code = request.POST.get('code', '').strip()
+    password = request.POST.get('password', '').strip()
+
+    staff = project.staff_members.filter(code=code, password=password).first()
+    if not staff:
+        is_past_deadline = project.deadline < timezone.now()
+        return render(request, 'shift/staff_auth.html', {
+            'project': project,
+            'token': token,
+            'error': 'コードまたはパスワードが正しくありません。',
+            'is_past_deadline': is_past_deadline,
+        })
+
+    submission, _ = Submission.objects.get_or_create(project=project, staff=staff)
     existing = {}
     for sel in submission.selections.prefetch_related('shift_types').all():
         existing[sel.date.isoformat()] = [st.pk for st in sel.shift_types.all()]
 
     return render(request, 'shift/staff_submit.html', {
-        'submission': submission,
         'project': project,
-        'dates': dates,
-        'shift_types': shift_types,
+        'token': token,
+        'submission': submission,
+        'staff_name': staff.name,
+        'staff_code': staff.code,
+        'dates': project.get_dates(),
+        'shift_types': project.shift_types.all(),
         'existing_json': json.dumps(existing),
         'is_past_deadline': project.deadline < timezone.now(),
     })
@@ -357,8 +404,7 @@ def staff_submit(request, token):
 @csrf_exempt
 @require_http_methods(['POST'])
 def staff_submit_save(request, token):
-    submission = get_object_or_404(Submission, token=token)
-    project = submission.project
+    project = get_object_or_404(Project, submit_token=token)
 
     if project.deadline < timezone.now():
         return JsonResponse({'success': False, 'message': '提出期限を過ぎています。'})
@@ -368,12 +414,27 @@ def staff_submit_save(request, token):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'message': 'データ形式が無効です。'})
 
-    selections = data.get('selections', {})  # {date_str: [shift_type_id, ...]}
+    staff_id = data.get('staff_id')
+    staff_name = data.get('staff_name', '').strip()
+    selections_data = data.get('selections', {})
     notes = data.get('notes', '').strip()
 
-    # 既存選択を削除して再作成
+    # スタッフ特定
+    if staff_id:
+        staff = get_object_or_404(Staff, pk=staff_id, project=project)
+    elif staff_name:
+        normalized = normalize_name(staff_name)
+        staff = project.staff_members.filter(name=normalized).first()
+        if not staff:
+            return JsonResponse({'success': False, 'message': f'「{staff_name}」はスタッフ一覧に見つかりません。名前を確認してください。'})
+        # セッションに名前を保存
+        request.session[f'staff_name_{project.pk}'] = normalized
+    else:
+        return JsonResponse({'success': False, 'message': 'スタッフ情報が不明です。'})
+
+    submission, _ = Submission.objects.get_or_create(project=project, staff=staff)
     submission.selections.all().delete()
-    for date_str, shift_ids in selections.items():
+    for date_str, shift_ids in selections_data.items():
         try:
             d = date.fromisoformat(date_str)
         except ValueError:

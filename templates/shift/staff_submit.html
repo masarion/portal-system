@@ -12,7 +12,6 @@
     body { font-family:'Inter',sans-serif; background:#f1f5f9; min-height:100vh; }
     .top-bar { background:linear-gradient(135deg,#1e40af,#2563eb); color:#fff; padding:.75rem 1rem; font-weight:700; font-size:1rem; display:flex; align-items:center; gap:.5rem; box-shadow:0 2px 12px rgba(37,99,235,.3); }
 
-    /* カレンダーグリッド */
     .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
     .cal-header { text-align:center; font-size:.7rem; font-weight:700; padding:.3rem 0; color:#64748b; }
     .cal-header.sat { color:#2563eb; }
@@ -27,26 +26,27 @@
     .cal-day .chips { padding:0 4px 4px; display:flex; flex-wrap:wrap; gap:2px; }
     .shift-chip { font-size:.62rem; font-weight:700; color:#fff; border-radius:3px; padding:1px 4px; line-height:1.4; white-space:nowrap; }
 
-    /* シフト選択モーダル内ボタン */
     .shift-btn { border:2px solid var(--border); border-radius:8px; padding:.5rem .75rem; cursor:pointer; transition:all .15s; display:flex; align-items:center; gap:.5rem; background:#fff; font-size:.875rem; font-weight:500; }
     .shift-btn:hover { border-color:#2563eb; }
     .shift-btn.selected { color:#fff; border-color:transparent; }
     .shift-dot { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
 
-    /* 進捗バー */
     .progress-bar-custom { height:6px; border-radius:99px; background:#e2e8f0; overflow:hidden; }
     .progress-fill { height:100%; background:#2563eb; border-radius:99px; transition:width .3s; }
 
-    /* 完了オーバーレイ */
     #successOverlay { display:none; position:fixed; inset:0; background:rgba(255,255,255,.97); z-index:9999; flex-direction:column; align-items:center; justify-content:center; }
     #successOverlay.show { display:flex; }
+
+    .name-input-card { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:1rem; margin-bottom:1rem; }
   </style>
 </head>
 <body>
 
 <div class="top-bar">
   <i class="bi bi-calendar3"></i>{{ project.name }}
-  {% if submission.staff %}<span class="ms-auto small fw-normal opacity-75">{{ submission.staff.name }}</span>{% endif %}
+  <span class="ms-auto small fw-normal opacity-75" id="staffLabel">
+    {% if staff_name %}{{ staff_name }}{% if staff_code %} ({{ staff_code }}){% endif %}{% endif %}
+  </span>
 </div>
 
 <div class="container py-3" style="max-width:640px;">
@@ -54,17 +54,7 @@
   {% if is_past_deadline %}
   <div class="alert alert-warning rounded-3 d-flex align-items-center gap-2">
     <i class="bi bi-alarm"></i>
-    <span>提出期限（{{ project.deadline|date:"Y/m/d H:i" }}）が過ぎています。提出はできません。</span>
-  </div>
-  {% else %}
-  <div class="d-flex align-items-center justify-content-between mb-2">
-    <div class="small text-muted">
-      <i class="bi bi-alarm me-1"></i>提出期限：{{ project.deadline|date:"Y/m/d H:i" }}
-    </div>
-    <div class="small text-muted" id="progressText">0 日入力済み</div>
-  </div>
-  <div class="progress-bar-custom mb-3">
-    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    <span>提出期限（{{ project.deadline|date:"Y/m/d H:i" }}）が過ぎています。</span>
   </div>
   {% endif %}
 
@@ -72,49 +62,63 @@
   <div class="alert alert-info rounded-3 small py-2 mb-3">{{ project.info_message }}</div>
   {% endif %}
 
+  <!-- 名前入力モード：名前入力欄 -->
+  {% if project.auth_mode == 'name' %}
+  <div class="name-input-card">
+    <label class="form-label fw-semibold small mb-1">あなたの名前を入力してください</label>
+    <div class="d-flex gap-2">
+      <input type="text" id="nameInput" class="form-control" placeholder="例：山田太郎"
+        value="{{ staff_name }}" {% if is_past_deadline %}disabled{% endif %}>
+      <button class="btn btn-primary btn-sm px-3" onclick="applyName()" {% if is_past_deadline %}disabled{% endif %}>
+        <i class="bi bi-check-lg"></i>
+      </button>
+    </div>
+    <div class="text-muted small mt-1" id="nameStatus">
+      {% if staff_name %}「{{ staff_name }}」として入力中{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not is_past_deadline %}
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <div class="small text-muted"><i class="bi bi-alarm me-1"></i>提出期限：{{ project.deadline|date:"Y/m/d H:i" }}</div>
+    <div class="small text-muted" id="progressText">0 日入力済み</div>
+  </div>
+  <div class="progress-bar-custom mb-3">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+  {% endif %}
+
   <!-- カレンダー -->
   <div class="cal-grid mb-2">
-    <div class="cal-header">月</div>
-    <div class="cal-header">火</div>
-    <div class="cal-header">水</div>
-    <div class="cal-header">木</div>
-    <div class="cal-header">金</div>
-    <div class="cal-header sat">土</div>
-    <div class="cal-header sun">日</div>
+    <div class="cal-header">月</div><div class="cal-header">火</div><div class="cal-header">水</div>
+    <div class="cal-header">木</div><div class="cal-header">金</div>
+    <div class="cal-header sat">土</div><div class="cal-header sun">日</div>
   </div>
 
-  <!-- 先頭の空白セル -->
-  {% if dates %}
   <div class="cal-grid" id="calGrid">
     {% for d in dates %}
     <div class="cal-day {% if d.weekday == 5 %}sat{% elif d.weekday == 6 %}sun{% endif %} {% if is_past_deadline %}disabled{% endif %}"
          data-date="{{ d|date:'Y-m-d' }}"
-         onclick="{% if not is_past_deadline %}openShiftModal('{{ d|date:'Y-m-d' }}', {{ d.day }}){% endif %}">
+         onclick="{% if not is_past_deadline %}openShiftModal('{{ d|date:'Y-m-d' }}'){% endif %}">
       <div class="day-num">{{ d.day }}</div>
       <div class="chips" id="chips-{{ d|date:'Y-m-d' }}"></div>
     </div>
     {% endfor %}
   </div>
-  {% endif %}
 
-  <!-- 特記事項 -->
   {% if not is_past_deadline %}
   <div class="mt-4">
     <label class="form-label fw-semibold small">特記事項・連絡事項（任意）</label>
-    <textarea id="notes" class="form-control" rows="3"
-      placeholder="管理者への連絡事項があれば入力してください"></textarea>
+    <textarea id="notes" class="form-control" rows="3" placeholder="管理者への連絡事項があれば入力してください"></textarea>
   </div>
-
   <div class="d-flex gap-2 mt-3">
-    <button class="btn btn-primary flex-grow-1 fw-600" style="font-weight:600;" onclick="openConfirm()">
+    <button class="btn btn-primary flex-grow-1 fw-bold" onclick="openConfirm()">
       <i class="bi bi-send me-2"></i>確認・提出する
     </button>
-    <button class="btn btn-outline-secondary" onclick="clearAll()">
-      <i class="bi bi-x-lg"></i>
-    </button>
+    <button class="btn btn-outline-secondary" onclick="clearAll()"><i class="bi bi-x-lg"></i></button>
   </div>
   {% endif %}
-
 </div>
 
 <!-- シフト選択モーダル -->
@@ -146,8 +150,9 @@
         {% if project.confirm_message %}
         <div class="alert alert-info small py-2 mb-3">{{ project.confirm_message }}</div>
         {% endif %}
+        <div class="small text-muted mb-2" id="confirmName"></div>
         <div style="max-height:50vh;overflow-y:auto;">
-          <table class="table table-sm table-bordered" id="confirmTable">
+          <table class="table table-sm table-bordered">
             <thead><tr><th>日付</th><th>曜日</th><th>希望シフト</th></tr></thead>
             <tbody id="confirmBody"></tbody>
           </table>
@@ -176,34 +181,35 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const SHIFT_TYPES = [
-  {% for st in shift_types %}
-  {id:{{ st.pk }}, name:"{{ st.name }}", short:"{{ st.short_name|default:st.name|truncatechars:3 }}", color:"{{ st.color }}"},
-  {% endfor %}
-];
-
+const SHIFT_TYPES = [{% for st in shift_types %}{id:{{ st.pk }},name:"{{ st.name }}",short:"{{ st.short_name|default:st.name|truncatechars:3 }}",color:"{{ st.color }}"},{% endfor %}];
 const TOTAL_DAYS = {{ dates|length }};
-const SUBMIT_URL = "{% url 'shift:staff_submit_save' submission.token %}";
+const SUBMIT_URL = "{% url 'shift:staff_submit_save' token %}";
 const CSRF = "{{ csrf_token }}";
+const AUTH_MODE = "{{ project.auth_mode }}";
+const STAFF_ID = {% if submission %}{{ submission.staff.pk }}{% else %}null{% endif %};
+let staffName = "{{ staff_name|escapejs }}";
 
-// selections: {dateStr: [shiftTypeId, ...]}
 let selections = {{ existing_json|safe }};
-// int id keys → ensure ints
-for (let k in selections) {
-  selections[k] = selections[k].map(Number);
-}
+for (let k in selections) selections[k] = selections[k].map(Number);
 
 let currentDate = null;
 let currentSelected = [];
 
-// ── 初期描画 ──
+// ── 名前入力モード ──
+function applyName() {
+  const input = document.getElementById('nameInput');
+  const val = input.value.trim();
+  if (!val) { alert('名前を入力してください。'); return; }
+  staffName = val;
+  document.getElementById('nameStatus').textContent = `「${val}」として入力中`;
+  document.getElementById('staffLabel').textContent = val;
+}
+
+// ── 描画 ──
 function renderAll() {
   let filled = 0;
-  for (let dateStr in selections) {
-    if (selections[dateStr].length > 0) {
-      filled++;
-      renderChips(dateStr);
-    }
+  for (let d in selections) {
+    if (selections[d].length > 0) { filled++; renderChips(d); }
   }
   updateProgress(filled);
 }
@@ -227,6 +233,7 @@ function renderChips(dateStr) {
     });
   } else {
     cell.classList.remove('has-selection');
+    cell.style.borderColor = '';
   }
 }
 
@@ -237,68 +244,58 @@ function updateProgress(filled) {
   document.getElementById('progressText').textContent = filled + ' / ' + TOTAL_DAYS + ' 日入力済み';
 }
 
-// ── モーダル ──
-function openShiftModal(dateStr, dayNum) {
+// ── シフト選択モーダル ──
+const DAY_NAMES = ['月','火','水','木','金','土','日'];
+function openShiftModal(dateStr) {
+  // 名前入力モードで名前未入力の場合はブロック
+  if (AUTH_MODE === 'name' && !staffName) {
+    alert('まず名前を入力して「✓」ボタンを押してください。');
+    document.getElementById('nameInput').focus();
+    return;
+  }
   currentDate = dateStr;
   currentSelected = [...(selections[dateStr] || [])];
-
-  const DAY_NAMES = ['月','火','水','木','金','土','日'];
   const d = new Date(dateStr);
   document.getElementById('shiftModalTitle').textContent =
-    d.getMonth()+1 + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay() === 0 ? 6 : d.getDay()-1] + '）';
-
+    (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()===0?6:d.getDay()-1] + '）';
   const body = document.getElementById('shiftModalBody');
   body.innerHTML = '';
   SHIFT_TYPES.forEach(st => {
     const btn = document.createElement('div');
     btn.className = 'shift-btn mb-2' + (currentSelected.includes(st.id) ? ' selected' : '');
     if (currentSelected.includes(st.id)) btn.style.background = st.color;
-    btn.innerHTML = `<span class="shift-dot" style="background:${st.color};"></span>${st.name}${st.time ? ' <span class="text-muted small ms-1">'+st.time+'</span>' : ''}`;
+    btn.innerHTML = `<span class="shift-dot" style="background:${st.color};"></span>${st.name}`;
     btn.onclick = () => toggleShift(btn, st.id, st.color);
     body.appendChild(btn);
   });
-
   new bootstrap.Modal(document.getElementById('shiftModal')).show();
 }
 
 function toggleShift(btn, id, color) {
   const idx = currentSelected.indexOf(id);
-  if (idx === -1) {
-    currentSelected.push(id);
-    btn.classList.add('selected');
-    btn.style.background = color;
-  } else {
-    currentSelected.splice(idx, 1);
-    btn.classList.remove('selected');
-    btn.style.background = '';
-  }
-  // selections に反映
+  if (idx === -1) { currentSelected.push(id); btn.classList.add('selected'); btn.style.background = color; }
+  else { currentSelected.splice(idx,1); btn.classList.remove('selected'); btn.style.background = ''; }
   selections[currentDate] = [...currentSelected];
   renderChips(currentDate);
-  let filled = Object.values(selections).filter(v => v.length > 0).length;
-  updateProgress(filled);
+  updateProgress(Object.values(selections).filter(v=>v.length>0).length);
 }
 
 function clearDay() {
-  if (!currentDate) return;
   currentSelected = [];
   selections[currentDate] = [];
   renderChips(currentDate);
-  let filled = Object.values(selections).filter(v => v.length > 0).length;
-  updateProgress(filled);
-  document.querySelectorAll('#shiftModalBody .shift-btn').forEach(btn => {
-    btn.classList.remove('selected');
-    btn.style.background = '';
-  });
+  updateProgress(Object.values(selections).filter(v=>v.length>0).length);
+  document.querySelectorAll('#shiftModalBody .shift-btn').forEach(b=>{b.classList.remove('selected');b.style.background='';});
 }
 
 function clearAll() {
   if (!confirm('すべての入力をクリアしますか？')) return;
   selections = {};
-  document.querySelectorAll('.cal-day').forEach(el => {
-    const chips = el.querySelector('.chips');
-    if (chips) chips.innerHTML = '';
+  document.querySelectorAll('.cal-day').forEach(el=>{
+    const chips=el.querySelector('.chips');
+    if(chips) chips.innerHTML='';
     el.classList.remove('has-selection');
+    el.style.borderColor='';
   });
   updateProgress(0);
 }
@@ -306,97 +303,69 @@ function clearAll() {
 // ── 確認モーダル ──
 const DAY_NAMES_JP = ['日','月','火','水','木','金','土'];
 function openConfirm() {
-  const allDates = Array.from(document.querySelectorAll('.cal-day'))
-    .map(el => el.dataset.date).filter(Boolean);
-
-  // 全日入力チェック
-  const unfilled = allDates.filter(d => !(selections[d] && selections[d].length > 0));
-  if (unfilled.length > 0) {
-    // 未入力の日付を赤くハイライト
-    allDates.forEach(d => {
-      const el = document.querySelector(`.cal-day[data-date="${d}"]`);
-      if (el) el.style.borderColor = '';
-    });
-    unfilled.forEach(d => {
-      const el = document.querySelector(`.cal-day[data-date="${d}"]`);
-      if (el) el.style.borderColor = '#dc2626';
-    });
-    alert(`まだ入力されていない日付が ${unfilled.length} 日あります。\nすべての日付にシフトを入力してから提出してください。`);
-    // 最初の未入力日にスクロール
-    const firstEl = document.querySelector(`.cal-day[data-date="${unfilled[0]}"]`);
-    if (firstEl) firstEl.scrollIntoView({behavior:'smooth', block:'center'});
+  if (AUTH_MODE === 'name' && !staffName) {
+    alert('名前を入力してから提出してください。');
     return;
   }
-
+  const allDates = Array.from(document.querySelectorAll('.cal-day')).map(el=>el.dataset.date).filter(Boolean);
+  const unfilled = allDates.filter(d=>!(selections[d]&&selections[d].length>0));
+  if (unfilled.length > 0) {
+    allDates.forEach(d=>{const el=document.querySelector(`.cal-day[data-date="${d}"]`);if(el)el.style.borderColor='';});
+    unfilled.forEach(d=>{const el=document.querySelector(`.cal-day[data-date="${d}"]`);if(el)el.style.borderColor='#dc2626';});
+    alert(`まだ入力されていない日付が ${unfilled.length} 日あります。\nすべての日付にシフトを入力してから提出してください。`);
+    document.querySelector(`.cal-day[data-date="${unfilled[0]}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
   const tbody = document.getElementById('confirmBody');
   tbody.innerHTML = '';
-  allDates.forEach(dateStr => {
-    if (!dateStr) return;
-    const ids = selections[dateStr] || [];
-    if (ids.length === 0) return;
-    const d = new Date(dateStr);
-    const shiftNames = ids.map(id => {
-      const st = SHIFT_TYPES.find(s => s.id === id);
-      return st ? `<span class="badge fw-normal" style="background:${st.color};">${st.name}</span>` : '';
-    }).join(' ');
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${d.getMonth()+1}/${d.getDate()}</td><td>${DAY_NAMES_JP[d.getDay()]}</td><td>${shiftNames}</td>`;
+  allDates.forEach(dateStr=>{
+    const ids=selections[dateStr]||[];
+    if(!ids.length) return;
+    const d=new Date(dateStr);
+    const shiftNames=ids.map(id=>{const st=SHIFT_TYPES.find(s=>s.id===id);return st?`<span class="badge fw-normal" style="background:${st.color};">${st.name}</span>`:''}).join(' ');
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${d.getMonth()+1}/${d.getDate()}</td><td>${DAY_NAMES_JP[d.getDay()]}</td><td>${shiftNames}</td>`;
     tbody.appendChild(tr);
   });
-  const notes = document.getElementById('notes').value.trim();
-  document.getElementById('confirmNotes').textContent = notes ? '特記事項：' + notes : '';
+  document.getElementById('confirmName').textContent = staffName ? `氏名：${staffName}` : '';
+  const notes=document.getElementById('notes').value.trim();
+  document.getElementById('confirmNotes').textContent=notes?'特記事項：'+notes:'';
   new bootstrap.Modal(document.getElementById('confirmModal')).show();
 }
 
 // ── 提出 ──
 function submitForm() {
-  const btn = document.querySelector('#confirmModal .btn-primary');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>送信中...';
-
-  fetch(SUBMIT_URL, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
-    body: JSON.stringify({
-      selections: selections,
-      notes: document.getElementById('notes').value.trim(),
-    }),
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
+  const btn=document.querySelector('#confirmModal .btn-primary');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>送信中...';
+  const body = { selections, notes: document.getElementById('notes').value.trim() };
+  if (STAFF_ID) body.staff_id = STAFF_ID;
+  else body.staff_name = staffName;
+  fetch(SUBMIT_URL,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify(body)})
+  .then(r=>r.json())
+  .then(data=>{
+    if(data.success){
       bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
-      document.getElementById('submittedAt').textContent =
-        new Date().toLocaleString('ja-JP') + ' 提出';
+      document.getElementById('submittedAt').textContent=new Date().toLocaleString('ja-JP')+' 提出';
       document.getElementById('successOverlay').classList.add('show');
     } else {
-      alert(data.message || '提出に失敗しました。');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-send me-1"></i>提出する';
+      alert(data.message||'提出に失敗しました。');
+      btn.disabled=false;
+      btn.innerHTML='<i class="bi bi-send me-1"></i>提出する';
     }
   })
-  .catch(() => {
-    alert('通信エラーが発生しました。再度お試しください。');
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-send me-1"></i>提出する';
-  });
+  .catch(()=>{alert('通信エラーが発生しました。');btn.disabled=false;btn.innerHTML='<i class="bi bi-send me-1"></i>提出する';});
 }
 
-// ── 初期化 ──
-// カレンダーの先頭を月曜始まりに揃える（空白セル挿入）
-(function alignCalendar() {
-  const grid = document.getElementById('calGrid');
-  if (!grid) return;
-  const firstDay = grid.querySelector('.cal-day');
-  if (!firstDay) return;
-  const dateStr = firstDay.dataset.date;
-  const d = new Date(dateStr);
-  // getDay(): 0=Sun,1=Mon,...6=Sat → 月曜始まり offset
-  let offset = d.getDay() === 0 ? 6 : d.getDay() - 1;
-  for (let i = 0; i < offset; i++) {
-    const blank = document.createElement('div');
-    grid.insertBefore(blank, firstDay);
-  }
+// ── カレンダー先頭の空白調整（月曜始まり） ──
+(function(){
+  const grid=document.getElementById('calGrid');
+  if(!grid) return;
+  const first=grid.querySelector('.cal-day');
+  if(!first) return;
+  const d=new Date(first.dataset.date);
+  const offset=d.getDay()===0?6:d.getDay()-1;
+  for(let i=0;i<offset;i++) grid.insertBefore(document.createElement('div'),first);
 })();
 
 renderAll();

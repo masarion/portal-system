@@ -56,10 +56,31 @@
                 value="{{ project.end_date|date:'Y-m-d'|default:default_end|default:'' }}">
             </div>
           </div>
-          <div class="mb-0">
+          <div class="mb-3">
             <label class="form-label">提出期限 <span class="text-danger">*</span></label>
             <input type="datetime-local" name="deadline" class="form-control"
               value="{{ project.deadline|date:'Y-m-d\TH:i'|default:'' }}" required>
+          </div>
+          <div class="mb-0">
+            <label class="form-label">認証モード <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3 mt-1">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="auth_mode" id="modeNameInput" value="name"
+                  {% if not project or project.auth_mode == 'name' %}checked{% endif %}
+                  onchange="updateAuthMode()">
+                <label class="form-check-label small fw-semibold" for="modeNameInput">
+                  名前入力モード<br><span class="fw-normal text-muted">スタッフが名前を入力してアクセス</span>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="auth_mode" id="modeCodeInput" value="code"
+                  {% if project.auth_mode == 'code' %}checked{% endif %}
+                  onchange="updateAuthMode()">
+                <label class="form-check-label small fw-semibold" for="modeCodeInput">
+                  コード＋パスワードモード<br><span class="fw-normal text-muted">コードとパスワードでアクセス</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -135,9 +156,10 @@
           <div class="mb-2">
             <input type="text" id="staffSearch" class="form-control form-control-sm" placeholder="氏名で検索...">
           </div>
-          <div class="row g-1 mb-1 text-muted small fw-semibold">
-            <div class="col-4">コード</div>
-            <div class="col-6">氏名 *</div>
+          <div class="row g-1 mb-1 text-muted small fw-semibold" id="staffHeader">
+            <div class="col-3" id="headerCode">コード</div>
+            <div class="col-4">氏名 *</div>
+            <div class="col-3" id="headerPass" style="display:none;">パスワード *</div>
             <div class="col-2"></div>
           </div>
           <div id="staffList" style="max-height:280px;overflow-y:auto;"></div>
@@ -163,27 +185,22 @@
     </div>
   </div>
 
-  <!-- 提出リンク（編集時） -->
+  <!-- 提出リンク（編集時・案件ごとに1URL） -->
   {% if project %}
+  {% with submit_url=request.scheme|add:"://"|add:request.get_host|add:"/shift/submit/"|add:project.submit_token|stringformat:"s"|add:"/" %}
   <div class="card mb-3">
     <div class="card-body py-3">
-      <div class="fw-semibold small mb-2"><i class="bi bi-link-45deg me-1 text-primary"></i>スタッフへの提出リンク</div>
-      <div class="d-flex flex-column gap-2" id="submissionLinks">
-        {% for sub in project.submissions.all %}
-        <div class="d-flex align-items-center gap-2">
-          <span class="text-muted small">{{ sub.staff.name|default:"（スタッフ未登録）" }}</span>
-          <code class="small bg-light px-2 py-1 rounded flex-grow-1" style="word-break:break-all;">
-            {{ request.scheme }}://{{ request.get_host }}{% url 'shift:staff_submit' sub.token %}
-          </code>
-          <button type="button" class="btn btn-sm btn-outline-secondary"
-            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'shift:staff_submit' sub.token %}')">
-            <i class="bi bi-copy"></i>
-          </button>
-        </div>
-        {% endfor %}
+      <div class="fw-semibold small mb-2"><i class="bi bi-link-45deg me-1 text-primary"></i>スタッフへの提出リンク（全員共通）</div>
+      <div class="d-flex align-items-center gap-2">
+        <code class="small bg-light px-2 py-1 rounded flex-grow-1" style="word-break:break-all;">{{ submit_url }}</code>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+          onclick="navigator.clipboard.writeText('{{ submit_url }}');this.innerHTML='<i class=\'bi bi-check\'></i>';">
+          <i class="bi bi-copy"></i>
+        </button>
       </div>
     </div>
   </div>
+  {% endwith %}
   {% endif %}
 
   <div class="d-flex gap-2">
@@ -301,19 +318,33 @@ document.addEventListener('click', () => {
   document.getElementById('colorPickerPopup').style.display = 'none';
 });
 
+// ── 認証モード切り替え ──
+function getAuthMode() {
+  return document.querySelector('input[name="auth_mode"]:checked')?.value || 'name';
+}
+
+function updateAuthMode() {
+  const isCode = getAuthMode() === 'code';
+  document.getElementById('headerPass').style.display = isCode ? '' : 'none';
+  renderStaffList();
+}
+
 // ── スタッフ ──
 function renderStaffList(filter='') {
+  const isCode = getAuthMode() === 'code';
   const list = document.getElementById('staffList');
   list.innerHTML = '';
   staffList.forEach((s, i) => {
-    if (filter && !s.name.includes(filter) && !s.code.includes(filter)) return;
+    if (filter && !s.name.includes(filter) && !(s.code||'').includes(filter)) return;
     const row = document.createElement('div');
     row.className = 'staff-row';
     row.innerHTML = `
-      <input type="text" class="form-control form-control-sm" placeholder="コード" value="${s.code}"
-        oninput="staffList[${i}].code=this.value" style="flex:0 0 90px;">
-      <input type="text" class="form-control form-control-sm" placeholder="氏名" value="${s.name}"
+      <input type="text" class="form-control form-control-sm" placeholder="コード${isCode?' *':''}" value="${s.code||''}"
+        oninput="staffList[${i}].code=this.value" style="flex:0 0 80px;">
+      <input type="text" class="form-control form-control-sm" placeholder="氏名 *" value="${s.name||''}"
         oninput="staffList[${i}].name=this.value;updateStaffCount()">
+      ${isCode ? `<input type="text" class="form-control form-control-sm" placeholder="パスワード *" value="${s.password||''}"
+        oninput="staffList[${i}].password=this.value" style="flex:0 0 100px;">` : ''}
       <button type="button" class="btn btn-sm btn-outline-danger px-2" onclick="removeStaff(${i})">
         <i class="bi bi-x"></i>
       </button>`;
@@ -323,10 +354,9 @@ function renderStaffList(filter='') {
 }
 
 function addStaffRow() {
-  staffList.push({id:null,code:'',name:''});
+  staffList.push({id:null, code:'', name:'', password:''});
   renderStaffList();
-  // 最後の行にフォーカス
-  const inputs = document.querySelectorAll('#staffList input[placeholder="氏名"]');
+  const inputs = document.querySelectorAll('#staffList input[placeholder="氏名 *"]');
   if (inputs.length) inputs[inputs.length-1].focus();
 }
 
