@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}スタッフ一覧{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h2><i class="bi bi-people me-2 text-primary"></i>スタッフ一覧</h2>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#importModal">
+      <i class="bi bi-upload me-1"></i>一括インポート
+    </button>
+    <a href="{% url 'attendance:employee_create' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-person-plus me-1"></i>新規登録
+    </a>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-end" method="GET">
+      <div class="col-auto">
+        <input type="text" name="search" class="form-control form-control-sm" placeholder="氏名・番号で検索" value="{{ request.GET.search }}">
+      </div>
+      <div class="col-auto">
+        <select name="workplace_id" class="form-select form-select-sm">
+          <option value="">所属：すべて</option>
+          {% for w in workplaces %}
+            <option value="{{ w.id }}" {% if request.GET.workplace_id == w.id|stringformat:"s" %}selected{% endif %}>{{ w.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <select name="is_active" class="form-select form-select-sm">
+          <option value="">在籍：すべて</option>
+          <option value="1" {% if request.GET.is_active == '1' %}selected{% endif %}>在籍中</option>
+          <option value="0" {% if request.GET.is_active == '0' %}selected{% endif %}>退職済</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm">絞り込み</button>
+        <a href="{% url 'attendance:employee_list' %}" class="btn btn-outline-secondary btn-sm ms-1">リセット</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>スタッフ番号</th><th>氏名</th><th>所属</th><th>状態</th><th></th></tr></thead>
+      <tbody>
+      {% for e in employees %}
+        <tr>
+          <td class="text-muted small">{{ e.employee_number }}</td>
+          <td>{{ e.name }}</td>
+          <td class="text-muted small">{{ e.workplace.name|default:"-" }}</td>
+          <td>
+            {% if e.is_active %}
+              <span class="text-success small">在籍中</span>
+            {% else %}
+              <span class="text-muted small">退職済</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'attendance:employee_qr' e.pk %}" class="btn btn-outline-secondary btn-sm py-0 px-2">QR</a>
+            <a href="{% url 'attendance:employee_edit' e.pk %}" class="btn btn-outline-primary btn-sm py-0 px-2 ms-1">編集</a>
+            <a href="{% url 'attendance:employee_delete' e.pk %}" class="btn btn-outline-danger btn-sm py-0 px-2 ms-1">削除</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">スタッフがいません</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{% url 'attendance:employee_import' %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">スタッフ一括インポート</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted">1行に「スタッフ番号,氏名」またはタブ区切りで貼り付けてください。</p>
+          <textarea name="csv_text" class="form-control font-monospace" rows="8" placeholder="E001,山田太郎&#10;E002,佐藤花子" required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">キャンセル</button>
+          <button class="btn btn-primary btn-sm">インポート</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

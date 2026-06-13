@@ -101,7 +101,7 @@
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ KINTAI_URL|default:'https://kintai-system-aj1s.onrender.com/management/' }}" target="_blank" rel="noopener">
+          <a class="nav-link {% block nav_attendance %}{% endblock %}" href="{% url 'attendance:dashboard' %}">
             <i class="bi bi-clock-history me-1"></i>勤怠管理
           </a>
         </li>

@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}勤怠一覧{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h2><i class="bi bi-table me-2 text-primary"></i>勤怠一覧</h2>
+  <a href="{% url 'attendance:attendance_export' %}?{{ request.GET.urlencode }}" class="btn btn-success btn-sm">
+    <i class="bi bi-file-earmark-excel me-1"></i>Excel出力
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form class="row g-2 align-items-end" method="GET">
+      <div class="col-auto">
+        <label class="form-label small mb-1">日付（開始）</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ request.GET.date_from }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-1">日付（終了）</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ request.GET.date_to }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-1">所属</label>
+        <select name="workplace_id" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for w in workplaces %}
+            <option value="{{ w.id }}" {% if request.GET.workplace_id == w.id|stringformat:"s" %}selected{% endif %}>{{ w.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-1">状態</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>退勤済み</option>
+          <option value="working"   {% if request.GET.status == 'working' %}selected{% endif %}>出勤中</option>
+          <option value="absent"    {% if request.GET.status == 'absent' %}selected{% endif %}>未出勤</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm">絞り込み</button>
+        <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-secondary btn-sm ms-1">リセット</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>日付</th><th>氏名</th><th>所属</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>状態</th></tr></thead>
+      <tbody>
+      {% for r in records %}
+        <tr>
+          <td>{{ r.date }}</td>
+          <td>{{ r.employee.name }}</td>
+          <td class="text-muted small">{{ r.employee.workplace.name|default:"-" }}</td>
+          <td>{{ r.check_in|time:"H:i"|default:"-" }}</td>
+          <td>{{ r.check_out|time:"H:i"|default:"-" }}</td>
+          <td>{{ r.work_duration }}</td>
+          <td>
+            {% if r.check_in and r.check_out %}
+              <span class="text-success">退勤済み</span>
+            {% elif r.check_in %}
+              <span class="text-primary">出勤中</span>
+            {% else %}
+              <span class="text-muted">未出勤</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">記録がありません</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

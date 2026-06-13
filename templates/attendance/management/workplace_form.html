@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}{% if workplace %}所属場所 編集{% else %}所属場所 登録{% endif %}{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-building me-2 text-primary"></i>{% if workplace %}所属場所 編集{% else %}所属場所 登録{% endif %}</h2>
+</div>
+<div class="card" style="max-width:420px">
+  <div class="card-body p-4">
+    <form method="POST">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label">場所名 <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control {% if errors.name %}is-invalid{% endif %}"
+               value="{{ workplace.name|default:'' }}" required>
+        {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
+      </div>
+      <div class="mb-4">
+        <label class="form-label">表示順</label>
+        <input type="number" name="order" class="form-control" min="0" value="{{ workplace.order|default:0 }}">
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary">{% if workplace %}更新{% else %}登録{% endif %}</button>
+        <a href="{% url 'attendance:workplace_list' %}" class="btn btn-outline-secondary">戻る</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}スタッフ削除{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-person-x me-2 text-danger"></i>スタッフ削除</h2>
+</div>
+<div class="card" style="max-width:480px">
+  <div class="card-body p-4">
+    <p>以下のスタッフを削除しますか？関連する打刻記録もすべて削除されます。</p>
+    <div class="bg-light rounded-3 p-3 mb-4">
+      <div class="fw-semibold">{{ employee.name }}</div>
+      <div class="text-muted small">{{ employee.employee_number }}{{ employee.workplace and ' · '|add:employee.workplace.name }}</div>
+    </div>
+    <form method="POST" class="d-flex gap-2">
+      {% csrf_token %}
+      <button class="btn btn-danger">削除する</button>
+      <a href="{% url 'attendance:employee_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

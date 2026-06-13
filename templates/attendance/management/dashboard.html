@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}勤怠ダッシュボード{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h2><i class="bi bi-clipboard-pulse me-2 text-primary"></i>勤怠ダッシュボード</h2>
+    <p class="text-muted small mb-0">{{ today|date:"Y年n月j日 (D)" }}</p>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  {% for s in stats %}
+  <div class="col-6 col-md-3">
+    <div class="stat-card p-3">
+      <div class="stat-icon bg-{{ s.color }} bg-opacity-10 text-{{ s.color }}">
+        <i class="bi bi-{{ s.icon }}"></i>
+      </div>
+      <div class="stat-value text-center">{{ s.value }}</div>
+      <div class="stat-label text-center">{{ s.label }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clock-history me-2"></i>本日の打刻記録</span>
+    <a href="{% url 'attendance:attendance_list' %}" class="btn btn-sm btn-outline-secondary">一覧へ</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>氏名</th><th>所属</th><th>出勤</th><th>退勤</th><th>状態</th></tr></thead>
+      <tbody>
+      {% for r in recent %}
+        <tr>
+          <td>{{ r.employee.name }}</td>
+          <td class="text-muted">{{ r.employee.workplace.name|default:"-" }}</td>
+          <td>{{ r.check_in|time:"H:i"|default:"-" }}</td>
+          <td>{{ r.check_out|time:"H:i"|default:"-" }}</td>
+          <td>
+            {% if r.check_in and r.check_out %}
+              <span class="text-success fw-500">退勤済み</span>
+            {% elif r.check_in %}
+              <span class="text-primary fw-500">出勤中</span>
+            {% else %}
+              <span class="text-muted">未出勤</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">本日の打刻記録はありません</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

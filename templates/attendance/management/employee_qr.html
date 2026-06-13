@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}QRコード - {{ employee.name }}{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-qr-code me-2 text-primary"></i>QRコード</h2>
+</div>
+<div class="card text-center p-4" style="max-width:400px">
+  <h5 class="fw-bold mb-1">{{ employee.name }}</h5>
+  <p class="text-muted small mb-3">{{ employee.employee_number }}{% if employee.workplace %} · {{ employee.workplace.name }}{% endif %}</p>
+  <div class="d-flex justify-content-center mb-3">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={{ scan_url|urlencode }}" alt="QR" style="border-radius:8px">
+  </div>
+  <p class="small text-muted text-break mb-3">{{ scan_url }}</p>
+  <div class="d-flex gap-2 justify-content-center">
+    <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="bi bi-printer me-1"></i>印刷</button>
+    <a href="{% url 'attendance:employee_list' %}" class="btn btn-outline-secondary btn-sm">戻る</a>
+  </div>
+</div>
+{% endblock %}

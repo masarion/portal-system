@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}所属場所 削除{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2><i class="bi bi-building me-2 text-danger"></i>所属場所 削除</h2>
+</div>
+<div class="card" style="max-width:480px">
+  <div class="card-body p-4">
+    <p>以下の所属場所を削除しますか？スタッフの所属は「未設定」になります。</p>
+    <div class="bg-light rounded-3 p-3 mb-4">
+      <div class="fw-semibold">{{ workplace.name }}</div>
+    </div>
+    <form method="POST" class="d-flex gap-2">
+      {% csrf_token %}
+      <button class="btn btn-danger">削除する</button>
+      <a href="{% url 'attendance:workplace_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

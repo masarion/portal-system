@@ -10,4 +10,5 @@ urlpatterns = [
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('portal/', include('portal.urls', namespace='portal')),
     path('shift/', include('shift.urls', namespace='shift')),
+    path('attendance/', include('attendance.urls', namespace='attendance')),
 ]

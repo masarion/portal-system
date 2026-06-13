@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}所属場所{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <h2><i class="bi bi-building me-2 text-primary"></i>所属場所</h2>
+  <a href="{% url 'attendance:workplace_create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>新規登録
+  </a>
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>場所名</th><th>表示順</th><th>スタッフ数</th><th></th></tr></thead>
+      <tbody>
+      {% for w in workplaces %}
+        <tr>
+          <td>{{ w.name }}</td>
+          <td class="text-muted">{{ w.order }}</td>
+          <td>{{ w.employee_count }}名</td>
+          <td class="text-end">
+            <a href="{% url 'attendance:workplace_edit' w.pk %}" class="btn btn-outline-primary btn-sm py-0 px-2">編集</a>
+            <a href="{% url 'attendance:workplace_delete' w.pk %}" class="btn btn-outline-danger btn-sm py-0 px-2 ms-1">削除</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="text-center text-muted py-4">所属場所がありません</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
